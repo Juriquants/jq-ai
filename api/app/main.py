@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from app.routers import projects
 from app.routers import skills
 from app.routers import auth
+from app.routers import api_keys
 
 # ----------------------------
 # Logging Setup
@@ -51,6 +52,7 @@ app.add_middleware(
 app.include_router(projects.router)
 app.include_router(skills.router)
 app.include_router(auth.router)
+app.include_router(api_keys.router)
 
 # ----------------------------
 # Models
