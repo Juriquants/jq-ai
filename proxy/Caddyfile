@@ -1,0 +1,41 @@
+# JQ.AI Reverse Proxy Configuration
+# Handles SSL termination, rate limiting, and request routing.
+
+{
+    admin off
+    auto_https off
+}
+
+:80 {
+    # Rate limiting
+    rate_limit {
+        zone dynamic {
+            key {remote_host}
+            events 100
+            window 1m
+        }
+        zone static {
+            key {remote_host}
+            events 10
+            window 1m
+        }
+    }
+
+    # API routes
+    handle_path /api/* {
+        rate_limit static
+        reverse_proxy api:8000
+    }
+
+    # Gateway routes
+    handle_path /gateway/* {
+        rate_limit static
+        reverse_proxy gateway:8001
+    }
+
+    # Web UI
+    handle {
+        rate_limit dynamic
+        reverse_proxy web:3000
+    }
+}
