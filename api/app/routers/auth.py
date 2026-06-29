@@ -45,6 +45,10 @@ class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
 # ----------------------------
 # Password Helpers
 # ----------------------------
@@ -139,3 +143,33 @@ async def get_current_user_endpoint(current_user: User = Depends(get_current_use
     Get the currently authenticated user.
     """
     return current_user
+
+@router.post("/change-password")
+async def change_password(
+    request: PasswordChangeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Change the authenticated user's password.
+    """
+    # Verify current password
+    if not verify_password(request.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect"
+        )
+    
+    # Validate new password length
+    if len(request.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 6 characters"
+        )
+    
+    # Hash and update the new password
+    current_user.hashed_password = get_password_hash(request.new_password)
+    await db.commit()
+    await db.refresh(current_user)
+    
+    return {"status": "success", "message": "Password updated successfully"}
