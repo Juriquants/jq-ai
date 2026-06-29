@@ -60,9 +60,7 @@ services:
   # ----------------------------
 
   api:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
+    build: ./api
     container_name: jq-api
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/jqai
@@ -81,15 +79,10 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-    volumes:
-      - ./api:/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     restart: unless-stopped
 
   gateway:
-    build:
-      context: ./gateway
-      dockerfile: Dockerfile
+    build: ./gateway
     container_name: jq-gateway
     environment:
       JQ_AI_GATEWAY_KEY: ${JQ_AI_GATEWAY_KEY}
@@ -98,20 +91,17 @@ services:
       AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT}
       AZURE_OPENAI_KEY: ${AZURE_OPENAI_KEY}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      JQ_AI_DEFAULT_PROVIDER: openai
+      JQ_AI_DEFAULT_MODEL: gpt-4
     ports:
       - "${GATEWAY_HOST_PORT}:8001"
     depends_on:
       api:
         condition: service_started
-    volumes:
-      - ./gateway:/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
     restart: unless-stopped
 
   web:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
+    build: ./web
     container_name: jq-web
     environment:
       NEXT_PUBLIC_API_URL: http://api:8000
@@ -128,9 +118,7 @@ services:
   # ----------------------------
 
   ingest-worker:
-    build:
-      context: ./ingest
-      dockerfile: Dockerfile
+    build: ./ingest
     container_name: jq-ingest
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/jqai
@@ -142,15 +130,10 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-    volumes:
-      - ./ingest:/app
-    command: python worker.py
     restart: unless-stopped
 
   arq-worker:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
+    build: ./api
     container_name: jq-arq
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/jqai
@@ -160,9 +143,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - ./api:/app
-    command: python -m app.worker
     restart: unless-stopped
 
   # ----------------------------
@@ -170,9 +150,7 @@ services:
   # ----------------------------
 
   proxy:
-    build:
-      context: ./proxy
-      dockerfile: Dockerfile
+    build: ./proxy
     container_name: jq-proxy
     ports:
       - "80:80"
