@@ -6,9 +6,12 @@ import os
 import logging
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+# Import routers
+from app.routers import projects
 
 # ----------------------------
 # Logging Setup
@@ -38,6 +41,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ----------------------------
+# Register Routers
+# ----------------------------
+
+app.include_router(projects.router)
 
 # ----------------------------
 # Models
