@@ -106,6 +106,6 @@ For the full picture of what's open, start with docs/ROADMAP.md — the live, or
 
 ## License
 
-Apache License 2.0 for the JQ.AI codebase. The patent‑grant clause is important given JuriQuants' broader ecosystem; the explicit trademark protection is enterprise‑friendly; the license is compatible with most other OSS licenses for ecosystem integration.
+[Apache License 2.0](https://github.com/Juriquants/jq-ai/blob/main/LICENSE) for the JQ.AI codebase. The patent‑grant clause is important given JuriQuants' broader ecosystem; the explicit trademark protection is enterprise‑friendly; the license is compatible with most other OSS licenses for ecosystem integration.
 
 The OpenWebUI fork (the web component) inherits OpenWebUI's license.
