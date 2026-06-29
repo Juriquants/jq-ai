@@ -1,0 +1,44 @@
+# Ruff configuration for JQ.AI
+# Targets Python 3.11+
+
+line-length = 88
+target-version = "py311"
+indent-width = 4
+
+# Enable all default rules plus some extras
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes errors
+    "I",   # import sorting
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "TCH", # typing-comprehensions
+    "RUF", # Ruff-specific rules
+    "PIE", # flake8-pie
+    "SIM", # flake8-simplify
+    "RET", # flake8-return
+]
+
+# Ignore rules that are too strict or conflict with formatting
+ignore = [
+    "E501", # line too long (handled by formatter)
+    "B008", # function-call-in-default-argument (sometimes necessary)
+    "SIM108", # if-else block (sometimes clearer)
+    "RUF012", # mutable-class-default (sometimes necessary)
+]
+
+# Allow automatic fixes
+fix = true
+
+# Unused imports and variables
+dummy-variable-rgx = "^(_+|(_[a-zA-Z0-9_]*))$"
+
+# Docstring conventions
+pydocstyle.convention = "google"
+
+# Formatting
+format = true
+format.quote-style = "double"
+format.indent-style = "space"
+format.line-ending = "lf"
