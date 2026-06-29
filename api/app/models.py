@@ -1,7 +1,7 @@
 # api/app/models.py
 # JQ.AI Database Models
 
-from sqlalchemy import Column, String, DateTime, func
+from sqlalchemy import Column, String, DateTime, func, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from app.database import Base, TimestampMixin
@@ -26,3 +26,15 @@ class Project(Base, TimestampMixin):
 
     def __repr__(self):
         return f"<Project(id={self.id}, name='{self.name}')>"
+
+class ApiKey(Base, TimestampMixin):
+    __tablename__ = "api_keys"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, nullable=False)
+    key = Column(String, nullable=False, unique=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    last_used = Column(DateTime, nullable=True)
+
+    def __repr__(self):
+        return f"<ApiKey(id={self.id}, name='{self.name}')>"
