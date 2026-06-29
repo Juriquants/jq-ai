@@ -121,9 +121,6 @@ services:
     depends_on:
       api:
         condition: service_started
-    volumes:
-      - ./web:/app
-    command: npm run dev
     restart: unless-stopped
 
   # ----------------------------
@@ -166,6 +163,23 @@ services:
     volumes:
       - ./api:/app
     command: python -m app.worker
+    restart: unless-stopped
+
+  # ----------------------------
+  # PROXY LAYER
+  # ----------------------------
+
+  proxy:
+    build:
+      context: ./proxy
+      dockerfile: Dockerfile
+    container_name: jq-proxy
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+      - gateway
+      - web
     restart: unless-stopped
 
 # ----------------------------
