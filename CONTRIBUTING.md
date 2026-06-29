@@ -142,7 +142,7 @@ You will be credited in the `CONTRIBUTORS.md` file and in the release notes for 
 
 We are committed to providing a welcoming and inclusive environment.
 
-Please read our [Code of Conduct](/CODE_OF_CONDUCT.md)before contributing. We will not tolerate harassment, discrimination, or disrespectful behavior.
+Please read our [Code of Conduct](/CODE_OF_CONDUCT.md) before contributing. We will not tolerate harassment, discrimination, or disrespectful behavior.
 
 ---
 
