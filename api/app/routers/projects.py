@@ -1,14 +1,15 @@
 # api/app/routers/projects.py
-# JQ.AI Projects CRUD endpoints
+# JQ.AI Projects CRUD endpoints (Authenticated)
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 from uuid import UUID
 from datetime import datetime
 
 from app.database import get_db
-from app.models import Project
+from app.models import Project, User
+from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -43,16 +44,15 @@ class ProjectResponse(BaseModel):
 async def create_project(
     project: ProjectCreate,
     db: AsyncSession = Depends(get_db),
-    # TODO: replace with real auth
-    user_id: UUID = UUID("00000000-0000-0000-0000-000000000000")
+    current_user: User = Depends(get_current_user)
 ):
     """
-    Create a new project.
+    Create a new project for the authenticated user.
     """
     new_project = Project(
         name=project.name,
         description=project.description,
-        created_by=user_id
+        created_by=current_user.id
     )
     db.add(new_project)
     await db.commit()
@@ -62,14 +62,13 @@ async def create_project(
 @router.get("/", response_model=list[ProjectResponse])
 async def list_projects(
     db: AsyncSession = Depends(get_db),
-    # TODO: replace with real auth
-    user_id: UUID = UUID("00000000-0000-0000-0000-000000000000")
+    current_user: User = Depends(get_current_user)
 ):
     """
-    List all projects for the current user.
+    List all projects for the authenticated user.
     """
     result = await db.execute(
-        select(Project).where(Project.created_by == user_id)
+        select(Project).where(Project.created_by == current_user.id)
     )
     projects = result.scalars().all()
     return projects
@@ -78,8 +77,7 @@ async def list_projects(
 async def get_project(
     project_id: UUID,
     db: AsyncSession = Depends(get_db),
-    # TODO: replace with real auth
-    user_id: UUID = UUID("00000000-0000-0000-0000-000000000000")
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get a single project by ID.
@@ -87,7 +85,7 @@ async def get_project(
     result = await db.execute(
         select(Project).where(
             Project.id == project_id,
-            Project.created_by == user_id
+            Project.created_by == current_user.id
         )
     )
     project = result.scalar_one_or_none()
@@ -100,8 +98,7 @@ async def update_project(
     project_id: UUID,
     project_update: ProjectUpdate,
     db: AsyncSession = Depends(get_db),
-    # TODO: replace with real auth
-    user_id: UUID = UUID("00000000-0000-0000-0000-000000000000")
+    current_user: User = Depends(get_current_user)
 ):
     """
     Update an existing project.
@@ -109,7 +106,7 @@ async def update_project(
     result = await db.execute(
         select(Project).where(
             Project.id == project_id,
-            Project.created_by == user_id
+            Project.created_by == current_user.id
         )
     )
     project = result.scalar_one_or_none()
@@ -129,8 +126,7 @@ async def update_project(
 async def delete_project(
     project_id: UUID,
     db: AsyncSession = Depends(get_db),
-    # TODO: replace with real auth
-    user_id: UUID = UUID("00000000-0000-0000-0000-000000000000")
+    current_user: User = Depends(get_current_user)
 ):
     """
     Delete a project by ID.
@@ -138,7 +134,7 @@ async def delete_project(
     result = await db.execute(
         select(Project).where(
             Project.id == project_id,
-            Project.created_by == user_id
+            Project.created_by == current_user.id
         )
     )
     project = result.scalar_one_or_none()
