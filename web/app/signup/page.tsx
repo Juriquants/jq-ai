@@ -1,12 +1,46 @@
 // web/app/signup/page.tsx
-// JQ.AI Web UI - Sign Up Page
+// JQ.AI Web UI - Functional Sign Up Page
 
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 
 export default function SignupPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || "Registration failed");
+      }
+
+      // After successful registration, redirect to login
+      router.push("/login");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0c0a0a] text-[#f5f0eb] flex items-center justify-center p-6">
       <motion.div
@@ -23,11 +57,20 @@ export default function SignupPage() {
 
         {/* Card */}
         <div className="bg-[#181514] border border-[#2a2826] rounded-2xl p-8 space-y-6">
-          <form className="space-y-4">
+          {error && (
+            <div className="bg-[#f85149]/10 border border-[#f85149]/30 p-3 rounded-lg text-sm text-[#f85149]">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1">
               <label className="text-sm font-medium text-[#8f8a86]">Email</label>
               <input
                 type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
                 className="w-full bg-[#0c0a0a] border border-[#2a2826] rounded-xl px-4 py-2 text-[#f5f0eb] focus:outline-none focus:border-[#d4a853] transition-colors"
                 placeholder="you@example.com"
               />
@@ -36,11 +79,20 @@ export default function SignupPage() {
               <label className="text-sm font-medium text-[#8f8a86]">Password</label>
               <input
                 type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
                 className="w-full bg-[#0c0a0a] border border-[#2a2826] rounded-xl px-4 py-2 text-[#f5f0eb] focus:outline-none focus:border-[#d4a853] transition-colors"
                 placeholder="••••••••"
               />
             </div>
-            <button className="w-full jq-button py-3 mt-4">Create Account</button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full jq-button py-3 mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? "Creating account..." : "Create Account"}
+            </button>
           </form>
 
           <div className="text-center text-sm text-[#8f8a86]">
