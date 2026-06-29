@@ -83,6 +83,22 @@ app.add_middleware(
 )
 
 # ----------------------------
+# Test Endpoint
+# ----------------------------
+
+@app.get("/test")
+async def test():
+    """
+    Test endpoint to verify the Gateway is running.
+    No API key required.
+    """
+    return {
+        "status": "ok",
+        "message": "JQ.AI Gateway is running correctly.",
+        "version": "0.3.0"
+    }
+
+# ----------------------------
 # Auth Middleware
 # ----------------------------
 
