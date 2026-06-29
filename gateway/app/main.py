@@ -1,9 +1,8 @@
 # gateway/app/main.py
 # JQ.AI Inference Gateway
-# Single audited egress point for all LLM inference requests.
+# Live inference with real LLM providers.
 
 import os
-import json
 import logging
 from typing import Optional, Dict, Any
 from datetime import datetime
@@ -29,11 +28,14 @@ logger = logging.getLogger("jq-gateway")
 # ----------------------------
 
 GATEWAY_KEY = os.getenv("JQ_AI_GATEWAY_KEY", "dev-key-change-me")
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
 AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
+
+DEFAULT_PROVIDER = os.getenv("JQ_AI_DEFAULT_PROVIDER", "openai")
+DEFAULT_MODEL = os.getenv("JQ_AI_DEFAULT_MODEL", "gpt-4")
 
 TIER_MAP = {
     1: {"name": "Local Inference", "provider": "ollama", "base_url": OLLAMA_BASE_URL},
@@ -69,7 +71,7 @@ class InferenceResponse(BaseModel):
 app = FastAPI(
     title="JQ.AI Inference Gateway",
     description="Single audited egress point for all LLM inference requests.",
-    version="0.2.0"
+    version="0.3.0"
 )
 
 app.add_middleware(
@@ -92,54 +94,106 @@ async def verify_gateway_key(request: Request):
     return True
 
 # ----------------------------
-# Provider Dispatch
+# Provider Dispatch (Live)
 # ----------------------------
 
-async def call_provider(request: InferenceRequest) -> Dict[str, Any]:
+async def call_openai(prompt: str, model: str, stream: bool) -> Dict[str, Any]:
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": stream
+    }
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers=headers,
+            json=payload
+        )
+        response.raise_for_status()
+        return response.json()
+
+async def call_anthropic(prompt: str, model: str, stream: bool) -> Dict[str, Any]:
+    headers = {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 4096,
+        "stream": stream
+    }
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers=headers,
+            json=payload
+        )
+        response.raise_for_status()
+        return response.json()
+
+async def call_ollama(prompt: str, model: str, stream: bool) -> Dict[str, Any]:
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": stream
+    }
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            f"{OLLAMA_BASE_URL}/api/chat",
+            json=payload
+        )
+        response.raise_for_status()
+        return response.json()
+
+async def call_provider(request: InferenceRequest) -> str:
     tier = TIER_MAP.get(request.tier)
     if not tier:
         raise HTTPException(status_code=400, detail="Invalid tier specified")
 
     provider = tier["provider"]
-    base_url = tier["base_url"]
+    model = request.model or DEFAULT_MODEL
+    prompt = request.prompt
 
-    if not base_url:
-        raise HTTPException(status_code=503, detail=f"Provider {provider} not configured")
+    logger.info(f"Routing to {provider} (Tier {request.tier}) with model {model}")
 
-    headers = {"Content-Type": "application/json"}
-    payload = {
-        "model": request.model or "gpt-4",
-        "messages": [{"role": "user", "content": request.prompt}],
-        "stream": request.stream
-    }
+    try:
+        if provider == "openai":
+            if not OPENAI_API_KEY:
+                raise HTTPException(status_code=503, detail="OpenAI API key not configured")
+            result = await call_openai(prompt, model, request.stream)
+            return result["choices"][0]["message"]["content"]
 
-    # Provider-specific adaptations
-    if provider == "anthropic":
-        headers["x-api-key"] = ANTHROPIC_API_KEY
-        headers["anthropic-version"] = "2023-06-01"
-        payload["max_tokens"] = 4096
-        endpoint = f"{base_url}/messages"
-    elif provider == "openai":
-        headers["Authorization"] = f"Bearer {OPENAI_API_KEY}"
-        endpoint = f"{base_url}/chat/completions"
-    elif provider == "azure":
-        headers["api-key"] = AZURE_OPENAI_KEY
-        endpoint = f"{base_url}/openai/deployments/{request.model or 'gpt-4'}/chat/completions"
-    elif provider == "ollama":
-        endpoint = f"{base_url}/api/chat"
-    else:
-        raise HTTPException(status_code=400, detail=f"Provider {provider} not implemented")
+        elif provider == "anthropic":
+            if not ANTHROPIC_API_KEY:
+                raise HTTPException(status_code=503, detail="Anthropic API key not configured")
+            result = await call_anthropic(prompt, model, request.stream)
+            return result["content"][0]["text"]
 
-    # Simulate the call (in production, uncomment the httpx lines below)
-    # async with httpx.AsyncClient() as client:
-    #     response = await client.post(endpoint, headers=headers, json=payload, timeout=30.0)
-    #     response.raise_for_status()
-    #     return response.json()
+        elif provider == "ollama":
+            result = await call_ollama(prompt, model, request.stream)
+            return result["message"]["content"]
 
-    # Simulated response for testing
-    return {
-        "choices": [{"message": {"content": f"Simulated response for {provider} (Tier {request.tier})"}}]
-    }
+        elif provider == "azure":
+            raise HTTPException(status_code=501, detail="Azure OpenAI not yet implemented")
+
+        else:
+            raise HTTPException(status_code=400, detail=f"Provider {provider} not implemented")
+
+    except httpx.TimeoutException:
+        logger.error("LLM provider timeout")
+        raise HTTPException(status_code=504, detail="LLM provider timeout")
+    except httpx.HTTPStatusError as e:
+        logger.error(f"LLM provider error: {e.response.status_code} - {e.response.text}")
+        raise HTTPException(status_code=e.response.status_code, detail=f"LLM provider error: {e.response.text}")
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal gateway error: {str(e)}")
 
 # ----------------------------
 # Endpoints
@@ -148,37 +202,26 @@ async def call_provider(request: InferenceRequest) -> Dict[str, Any]:
 @app.post("/v1/inference", dependencies=[Depends(verify_gateway_key)])
 async def inference(request: InferenceRequest):
     """
-    Route an inference request through the gateway.
+    Route an inference request through the gateway to a live LLM provider.
     """
-    logger.info(f"Received request for tier {request.tier}")
+    logger.info(f"Received inference request for tier {request.tier}")
 
-    try:
-        provider_response = await call_provider(request)
-        response_text = provider_response.get("choices", [{}])[0].get("message", {}).get("content", "No response")
+    # For now, we skip anonymization (will be added in the next layer)
+    response_text = await call_provider(request)
 
-        return InferenceResponse(
-            response=response_text,
-            tier=request.tier,
-            provider=TIER_MAP[request.tier]["provider"],
-            anonymized=request.anonymize,
-            request_id=request.headers.get("X-Request-ID", "unknown"),
-            timestamp=datetime.utcnow().isoformat()
-        )
-
-    except Exception as e:
-        logger.error(f"Inference failed: {str(e)}")
-        raise HTTPException(status_code=502, detail=f"Inference provider error: {str(e)}")
+    return InferenceResponse(
+        response=response_text,
+        tier=request.tier,
+        provider=TIER_MAP[request.tier]["provider"],
+        anonymized=request.anonymize,
+        request_id=request.headers.get("X-Request-ID", "unknown"),
+        timestamp=datetime.utcnow().isoformat()
+    )
 
 @app.get("/health", dependencies=[Depends(verify_gateway_key)])
 async def health():
-    """
-    Health check for the gateway.
-    """
-    return {"status": "healthy", "gateway_version": "0.2.0"}
+    return {"status": "healthy", "gateway_version": "0.3.0"}
 
 @app.get("/tiers", dependencies=[Depends(verify_gateway_key)])
 async def list_tiers():
-    """
-    Return the available inference tiers.
-    """
     return {"tiers": TIER_MAP}
