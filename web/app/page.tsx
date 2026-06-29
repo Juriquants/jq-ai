@@ -3,6 +3,7 @@
 
 "use client";
 
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, Terminal, Shield, Code, Database } from "lucide-react";
 
@@ -25,7 +26,7 @@ export default function Home() {
           <a href="#" className="hover:text-[#d4a853] transition-colors">Chat</a>
           <a href="#" className="hover:text-[#d4a853] transition-colors">Skills</a>
           <a href="#" className="hover:text-[#d4a853] transition-colors">Projects</a>
-          <button className="jq-button text-sm px-5 py-2">Sign In</button>
+          <Link href="/login" className="jq-button text-sm px-5 py-2">Sign In</Link>
         </div>
       </nav>
 
