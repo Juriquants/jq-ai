@@ -1,0 +1,178 @@
+version: '3.8'
+
+services:
+  # ----------------------------
+  # DATA LAYER
+  # ----------------------------
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: jq-postgres
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: jqai
+    ports:
+      - "${POSTGRES_HOST_PORT}:5432"
+    volumes:
+      - jq-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: jq-redis
+    ports:
+      - "${REDIS_HOST_PORT}:6379"
+    volumes:
+      - jq-redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: jq-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "${MINIO_API_HOST_PORT}:9000"
+      - "${MINIO_CONSOLE_HOST_PORT}:9001"
+    volumes:
+      - jq-minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+
+  # ----------------------------
+  # APPLICATION LAYER
+  # ----------------------------
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: jq-api
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/jqai
+      REDIS_URL: redis://redis:6379
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JQ_AI_GATEWAY_URL: http://gateway:8001
+    ports:
+      - "${API_HOST_PORT}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./api:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: jq-gateway
+    environment:
+      JQ_AI_GATEWAY_KEY: ${JQ_AI_GATEWAY_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT}
+      AZURE_OPENAI_KEY: ${AZURE_OPENAI_KEY}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+    ports:
+      - "${GATEWAY_HOST_PORT}:8001"
+    depends_on:
+      api:
+        condition: service_started
+    volumes:
+      - ./gateway:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: jq-web
+    environment:
+      NEXT_PUBLIC_API_URL: http://api:8000
+      NEXT_PUBLIC_GATEWAY_URL: http://gateway:8001
+    ports:
+      - "${WEB_HOST_PORT}:3000"
+    depends_on:
+      api:
+        condition: service_started
+    volumes:
+      - ./web:/app
+    command: npm run dev
+    restart: unless-stopped
+
+  # ----------------------------
+  # WORKERS / INGESTION
+  # ----------------------------
+
+  ingest-worker:
+    build:
+      context: ./ingest
+      dockerfile: Dockerfile
+    container_name: jq-ingest
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/jqai
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./ingest:/app
+    command: python worker.py
+    restart: unless-stopped
+
+  arq-worker:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: jq-arq
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/jqai
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./api:/app
+    command: python -m app.worker
+    restart: unless-stopped
+
+# ----------------------------
+# VOLUMES
+# ----------------------------
+
+volumes:
+  jq-pgdata:
+  jq-redisdata:
+  jq-minio:
